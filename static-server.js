@@ -2,7 +2,7 @@
 const http = require('http')
 const url = require('url')
 const path = require('path')
-const fs = require('fs')
+const fs = require('fs').promises
 const { createReadStream, createWriteStream } = require('fs')
 const mime = require('mime')
 
@@ -18,24 +18,18 @@ class Server {
    * @function sendError 处理文件找不到的错误
    * @function sendFile 处理文件
    */
-  handleRequest(req, res) {
+  async handleRequest(req, res) {
     //处理路径
     let { pathname } = url.parse(req.url)
     let absPath = path.join(this.dir, pathname)
     console.log(this.dir)
     console.log(pathname)
     try {
-      //判断文件夹还是文件
-      fs.stat(absPath, (err, statObj) => {
-        if (err) {
-          throw err
-          return false
-        }
-        if (statObj.isDirectory()) {
-        } else {
-          this.sendFile(absPath, req, res)
-        }
-      })
+      let statObj = await fs.stat(absPath)
+      if (statObj.isFile()) {
+        this.sendFile(absPath, req, res, statObj)
+      } else {
+      }
     } catch (e) {
       console.log(e)
       this.sendError(e, res)
@@ -56,7 +50,7 @@ class Server {
     server.listen(this.port, () => {
       console.log(`Starting up http-server, serving./${this.dir.split('\\').pop()}
       Available on:
-      http://127.0.0.1:this.port
+      http://127.0.0.1:${this.port}
       Hit CTRL-C to stop the server`)
     })
   }
