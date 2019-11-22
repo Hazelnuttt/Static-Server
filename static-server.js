@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs').promises
 const { createReadStream, createWriteStream } = require('fs')
 const mime = require('mime')
+const nunjucks = require('nunjucks')
 
 class Server {
   constructor(config) {
@@ -29,6 +30,20 @@ class Server {
       if (statObj.isFile()) {
         this.sendFile(absPath, req, res, statObj)
       } else {
+        let children = await fs.readdir(absPath)
+        // 数据  + 模板引擎 nunjucks
+        children = children.map(item => {
+          return {
+            current: item,
+            parent: path.join(pathname, item) // 将自己的当前的路径 和 文件名进行拼接 组成一个新的连接
+          }
+        })
+        let templateStr = nunjucks.render(path.resolve(__dirname, 'template.html'), {
+          items: children
+        })
+        res.setHeader('Content-Type', 'text/html;charset=utf8')
+        res.end(templateStr)
+        //console.log(children)
       }
     } catch (e) {
       console.log(e)
