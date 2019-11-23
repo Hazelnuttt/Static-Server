@@ -3,7 +3,7 @@ const http = require('http')
 const url = require('url')
 const path = require('path')
 const fs = require('fs').promises
-const { createReadStream, createWriteStream } = require('fs')
+const { createReadStream, createWriteStream, readFileSync } = require('fs')
 const mime = require('mime')
 const nunjucks = require('nunjucks')
 
@@ -50,12 +50,45 @@ class Server {
       this.sendError(e, res)
     }
   }
+  hasCache(currentPath, req, res, statObj) {
+    //第一次缓存 强制缓存
+    res.setHeader('Cache-Control', 'max-age=10')
+    res.setHeader('Expires', new Date(Date.now() + 10 * 1000))
 
-  sendFile(currentPath, req, res) {
+    //对比缓存 1)时间对比 2)文件对比
+    let ctime = statObj.ctime.toGMTString()
+    res.setHeader('Last-Modified', ctime)
+    let content = readFileSync(currentPath, 'utf8')
+    let etag = require('crypto')
+      .createHash('md5')
+      .update(content)
+      .digest('base64')
+    res.setHeader('Etag', etag)
+
+    let ifModifiedSince = req.headers['if-modified-since']
+    let ifNoneMatch = req.headers['if-none-match']
+    // 可能一秒内 改变了多次
+    if (ifModifiedSince !== ctime) {
+      // 如果当前用户传递过来的 和 当前状态不一样说明没有缓存
+      return false
+    }
+    // 在比较内容
+    if (etag !== ifNoneMatch) {
+      return false
+    }
+    return true
+  }
+
+  sendFile(currentPath, req, res, statObj) {
+    if (this.hasCache(currentPath, req, res, statObj)) {
+      res.statusCode = 304
+      return res.end()
+    }
     //可以是文件流，也可以文件读写
     res.setHeader('Content-Type', mime.getType(currentPath) + ';charset=utf-8')
     createReadStream(currentPath).pipe(res)
   }
+
   sendError(err, res) {
     res.statusCode = 404
     res.end('Not Found')
